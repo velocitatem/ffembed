@@ -1,0 +1,22 @@
+[project]
+name = "ffembed"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Daniel Rosel", email = "daniel@alves.world" }
+]
+requires-python = ">=3.10"
+dependencies = [
+    "fastembed>=0.4",
+    "watchdog>=4.0",
+    "click>=8.1",
+    "rich>=13.7",
+]
+
+[project.scripts]
+ffembed = "ffembed.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.8.19,<0.9.0"]
+build-backend = "uv_build"
