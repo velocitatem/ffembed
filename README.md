@@ -6,9 +6,18 @@ A tiny local semantic index for your files. Point it at a directory, give it
 a glob filter, and it keeps an embedding index in sync as files change.
 
 Your agents will thank you and so will your wallet. Teach them to use it
-with the [ffembed skill](.claude/skills/ffembed/SKILL.md) — drop it in
+with the [ffembed skill](.claude/skills/ffembed/SKILL.md) ... drop it in
 your project's `.claude/skills/` and any Claude Code session will know
 how to drive it.
+
+## Install
+
+```
+uv tool install git+https://github.com/velocitatem/ffembed
+```
+
+Requires [uv](https://docs.astral.sh/uv/). This installs the `ffembed`
+command on your PATH.
 
 ```
 ffembed watch ~/notes --filter "*.md"   # index once, register for watching
