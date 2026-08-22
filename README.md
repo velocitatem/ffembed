@@ -1,8 +1,14 @@
 # ffembed
 
-A tiny local semantic index for your files. Point it at a directory, give it
-a glob filter, and it keeps an embedding index in sync as files change —
 no server, no cloud calls, no vector DB to run.
+
+A tiny local semantic index for your files. Point it at a directory, give it
+a glob filter, and it keeps an embedding index in sync as files change.
+
+Your agents will thank you and so will your wallet. Teach them to use it
+with the [ffembed skill](.claude/skills/ffembed/SKILL.md) — drop it in
+your project's `.claude/skills/` and any Claude Code session will know
+how to drive it.
 
 ```
 ffembed watch ~/notes --filter "*.md"   # index once, register for watching
