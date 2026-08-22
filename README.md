@@ -1,4 +1,4 @@
-# ffembed
+![ffembed](banner.png)
 
 no server, no cloud calls, no vector DB to run.
 
