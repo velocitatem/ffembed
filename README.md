@@ -13,7 +13,11 @@ how to drive it.
 ## Install
 
 ```
+# text-only (small, no torch)
 uv tool install git+https://github.com/velocitatem/ffembed
+
+# with image embedding support via DINOv3
+uv tool install 'git+https://github.com/velocitatem/ffembed[image]'
 ```
 
 Requires [uv](https://docs.astral.sh/uv/). This installs the `ffembed`
@@ -26,6 +30,20 @@ ffembed search "that thing about debounce"
 ffembed stop
 ```
 
+Image files (`jpg/png/webp/gif/bmp/tiff`) are embedded with a local DINOv3
+vision model when the `image` extra is installed. Search with an image path
+to find visually similar indexed images:
+
+```
+ffembed watch ~/photos --filter "*.jpg"
+ffembed search ~/photos/query.jpg
+```
+
+> DINOv3 weights are gated on Hugging Face. Accept the license on the model
+> page and authenticate with `huggingface-cli login` or set `HF_TOKEN` before
+> using the DINOv3 aliases. Any Hugging Face image model name can be passed to
+> `--vision-model` if you prefer a different or un-gated model.
+
 ## How it works
 
 - Everything lives under `~/.ffembed/`: one SQLite database (`db.sqlite`),
@@ -35,25 +53,28 @@ ffembed stop
   garden with `ffembed models` (default: `bge-small`).
 - Files are read, chunked on paragraph/sentence boundaries (~1800 chars,
   200 char overlap), embedded, and stored as chunk rows.
+- Image files are embedded whole with a local DINOv3 model (requires the
+  `image` extra).
 - The daemon watches registered directories with `watchdog` and debounces
   bursts of filesystem events (default 2s of quiet) before re-indexing a
   file, so a flurry of editor saves triggers one re-embed, not several.
 - Search embeds the query and does a brute-force cosine scan over stored
-  chunks — simple, and plenty fast at personal-library scale.
+  chunks — simple, and plenty fast at personal-library scale. Text queries
+  search text chunks; image paths search image chunks.
 
 ## Commands
 
 | command | what it does |
 |---|---|
-| `ffembed watch DIR [--filter GLOB] [--model NAME]` | register + index a directory |
+| `ffembed watch DIR [--filter GLOB] [--model NAME] [--vision-model NAME]` | register + index a directory |
 | `ffembed unwatch DIR` | stop watching and drop its data |
 | `ffembed list` | show watched directories and stats |
 | `ffembed reindex [DIR]` | force a full reindex |
-| `ffembed search QUERY [--dir DIR] [-k N]` | semantic search |
+| `ffembed search QUERY [--dir DIR] [-k N]` | semantic search (text or image path) |
 | `ffembed start [--debounce SECS]` | start the background daemon |
 | `ffembed stop` / `restart` | stop / restart the daemon |
 | `ffembed status` | daemon + index status |
-| `ffembed models` | list available embedding models |
+| `ffembed models` | list available text and vision embedding models |
 
 Adding a new `watch` target while the daemon is running requires a
 `ffembed restart` to pick it up.

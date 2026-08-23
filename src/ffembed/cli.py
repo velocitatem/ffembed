@@ -16,6 +16,7 @@ from rich.table import Table
 from . import db
 from .embed import DEFAULT_MODEL, GARDEN
 from .indexer import index_target, remove_missing_files
+from .vision import DEFAULT_VISION_MODEL, VISION_GARDEN
 
 console = Console()
 
@@ -28,18 +29,23 @@ def main():
 @main.command()
 @click.argument("directory", type=click.Path(exists=True, file_okay=False))
 @click.option("--filter", "pattern", default="*.md", show_default=True, help="Glob pattern for filenames to index.")
-@click.option("--model", default=DEFAULT_MODEL, show_default=True, help=f"Embedding model. One of: {', '.join(GARDEN)} (or any fastembed model name).")
-def watch(directory: str, pattern: str, model: str):
-    """Register DIRECTORY for indexing and index it once immediately."""
+@click.option("--model", default=DEFAULT_MODEL, show_default=True, help=f"Text embedding model. One of: {', '.join(GARDEN)} (or any fastembed model name).")
+@click.option("--vision-model", default=DEFAULT_VISION_MODEL, show_default=True, help=f"Image embedding model. One of: {', '.join(VISION_GARDEN)} (or any DINOv3 HF name).")
+def watch(directory: str, pattern: str, model: str, vision_model: str):
+    """Register DIRECTORY for indexing and index it once immediately.
+
+    Image files (jpg/png/webp/gif/bmp/tiff) are embedded with the DINOv3
+    vision model. Text files are embedded with the text model.
+    """
     from . import daemon
 
     root = str(Path(directory).resolve())
     with db.cursor() as conn:
-        target_id = db.add_target(conn, root, pattern, model)
+        target_id = db.add_target(conn, root, pattern, model, vision_model=vision_model)
         target_row = conn.execute("SELECT * FROM targets WHERE id = ?", (target_id,)).fetchone()
         with console.status(f"Indexing {root} ({pattern})..."):
             count = index_target(conn, target_row)
-    console.print(f"[green]Watching[/green] {root} [{pattern}] with model '{model}' - indexed {count} file(s).")
+    console.print(f"[green]Watching[/green] {root} [{pattern}] with text model '{model}' and vision model '{vision_model}' - indexed {count} file(s).")
     if daemon.is_running():
         console.print("[yellow]Daemon is running - restart it to pick up the new target:[/yellow] ffembed restart")
     else:
@@ -72,6 +78,7 @@ def list_targets():
         table.add_column("path")
         table.add_column("filter")
         table.add_column("model")
+        table.add_column("vision")
         table.add_column("files")
         table.add_column("chunks")
         for t in targets:
@@ -80,7 +87,8 @@ def list_targets():
                 "SELECT COUNT(*) c FROM chunks JOIN files ON files.id = chunks.file_id WHERE files.target_id = ?",
                 (t["id"],),
             ).fetchone()["c"]
-            table.add_row(t["path"], t["pattern"], t["model"], str(files), str(chunks))
+            vision = t["vision_model"]
+            table.add_row(t["path"], t["pattern"], t["model"], vision if vision else DEFAULT_VISION_MODEL, str(files), str(chunks))
     console.print(table)
 
 
@@ -119,9 +127,12 @@ def search(query: str, target_dir: str | None, top_k: int):
         console.print("[yellow]No results.[/yellow] Have you run 'ffembed watch <dir>' yet?")
         return
     for score, row in results:
-        snippet = row["text"].strip().replace("\n", " ")
-        if len(snippet) > 220:
-            snippet = snippet[:220] + "…"
+        if row["kind"] == "image":
+            snippet = "[image]"
+        else:
+            snippet = row["text"].strip().replace("\n", " ")
+            if len(snippet) > 220:
+                snippet = snippet[:220] + "…"
         console.print(f"[bold cyan]{score:.3f}[/bold cyan]  [dim]{row['file_path']}[/dim]")
         console.print(f"    {snippet}\n")
 
@@ -175,14 +186,22 @@ def status():
 
 @main.command()
 def models():
-    """List the embedding garden."""
-    table = Table(title="embedding garden")
-    table.add_column("alias")
-    table.add_column("model")
+    """List the text and vision embedding gardens."""
+    text_table = Table(title="text embedding garden")
+    text_table.add_column("alias")
+    text_table.add_column("model")
     for alias, name in GARDEN.items():
         marker = " (default)" if alias == DEFAULT_MODEL else ""
-        table.add_row(alias + marker, name)
-    console.print(table)
+        text_table.add_row(alias + marker, name)
+    console.print(text_table)
+
+    vision_table = Table(title="vision embedding garden")
+    vision_table.add_column("alias")
+    vision_table.add_column("model")
+    for alias, name in VISION_GARDEN.items():
+        marker = " (default)" if alias == DEFAULT_VISION_MODEL else ""
+        vision_table.add_row(alias + marker, name)
+    console.print(vision_table)
 
 
 if __name__ == "__main__":

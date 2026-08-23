@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS targets (
     path TEXT NOT NULL UNIQUE,
     pattern TEXT NOT NULL DEFAULT '*',
     model TEXT NOT NULL,
+    vision_model TEXT,
     created_at REAL NOT NULL
 );
 
@@ -32,6 +33,7 @@ CREATE TABLE IF NOT EXISTS chunks (
     id INTEGER PRIMARY KEY,
     file_id INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
     chunk_index INTEGER NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'text',
     text TEXT NOT NULL,
     dim INTEGER NOT NULL,
     embedding BLOB NOT NULL
@@ -42,12 +44,27 @@ CREATE INDEX IF NOT EXISTS idx_chunks_file ON chunks(file_id);
 """
 
 
+def _column_exists(conn: sqlite3.Connection, table: str, column: str) -> bool:
+    rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+    return any(row[1] == column for row in rows)
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Add columns introduced after the initial release without breaking old DBs."""
+    if not _column_exists(conn, "targets", "vision_model"):
+        conn.execute("ALTER TABLE targets ADD COLUMN vision_model TEXT")
+    if not _column_exists(conn, "chunks", "kind"):
+        conn.execute("ALTER TABLE chunks ADD COLUMN kind TEXT NOT NULL DEFAULT 'text'")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_chunks_kind ON chunks(kind)")
+
+
 def connect() -> sqlite3.Connection:
     ensure_root()
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(SCHEMA)
+    _migrate(conn)
     return conn
 
 
@@ -72,11 +89,11 @@ def unpack_vector(blob: bytes) -> list[float]:
 
 # --- targets -----------------------------------------------------------
 
-def add_target(conn: sqlite3.Connection, path: str, pattern: str, model: str) -> int:
+def add_target(conn: sqlite3.Connection, path: str, pattern: str, model: str, vision_model: str | None = None) -> int:
     conn.execute(
-        "INSERT INTO targets (path, pattern, model, created_at) VALUES (?, ?, ?, ?) "
-        "ON CONFLICT(path) DO UPDATE SET pattern=excluded.pattern, model=excluded.model",
-        (path, pattern, model, time.time()),
+        "INSERT INTO targets (path, pattern, model, vision_model, created_at) VALUES (?, ?, ?, ?, ?) "
+        "ON CONFLICT(path) DO UPDATE SET pattern=excluded.pattern, model=excluded.model, vision_model=excluded.vision_model",
+        (path, pattern, model, vision_model, time.time()),
     )
     return conn.execute("SELECT id FROM targets WHERE path = ?", (path,)).fetchone()["id"]
 
@@ -125,10 +142,10 @@ def remove_file(conn: sqlite3.Connection, path: str) -> None:
     conn.execute("DELETE FROM files WHERE path = ?", (path,))
 
 
-def insert_chunk(conn: sqlite3.Connection, file_id: int, index: int, text: str, embedding) -> None:
+def insert_chunk(conn: sqlite3.Connection, file_id: int, index: int, text: str, embedding, *, kind: str = "text") -> None:
     conn.execute(
-        "INSERT INTO chunks (file_id, chunk_index, text, dim, embedding) VALUES (?, ?, ?, ?, ?)",
-        (file_id, index, text, len(embedding), pack_vector(embedding)),
+        "INSERT INTO chunks (file_id, chunk_index, kind, text, dim, embedding) VALUES (?, ?, ?, ?, ?, ?)",
+        (file_id, index, kind, text, len(embedding), pack_vector(embedding)),
     )
 
 
@@ -140,16 +157,18 @@ def stats(conn: sqlite3.Connection) -> dict:
     }
 
 
-def all_chunks_for_search(conn: sqlite3.Connection, target_path: str | None = None):
+def all_chunks_for_search(conn: sqlite3.Connection, target_path: str | None = None, kind: str = "text"):
     query = """
-        SELECT chunks.id, chunks.text, chunks.embedding, chunks.dim,
-               files.path AS file_path, targets.model AS model, targets.path AS target_path
+        SELECT chunks.id, chunks.text, chunks.embedding, chunks.dim, chunks.kind,
+               files.path AS file_path, targets.model AS model,
+               targets.vision_model AS vision_model, targets.path AS target_path
         FROM chunks
         JOIN files ON files.id = chunks.file_id
         JOIN targets ON targets.id = files.target_id
+        WHERE chunks.kind = ?
     """
-    params = ()
+    params = [kind]
     if target_path:
-        query += " WHERE targets.path = ?"
-        params = (target_path,)
+        query += " AND targets.path = ?"
+        params.append(target_path)
     return conn.execute(query, params).fetchall()
