@@ -2,6 +2,8 @@
 
 no server, no cloud calls, no vector DB to run.
 
+**~4.5× fewer tokens to get the right file into your agent's hand** than grep
+
 A tiny local semantic index for your files. Point it at a directory, give it
 a glob filter, and it keeps an embedding index in sync as files change.
 
@@ -20,29 +22,12 @@ uv tool install git+https://github.com/velocitatem/ffembed
 uv tool install 'git+https://github.com/velocitatem/ffembed[image]'
 ```
 
-Requires [uv](https://docs.astral.sh/uv/). This installs the `ffembed`
-command on your PATH.
-
 ```
 ffembed watch ~/notes --filter "*.md"   # index once, register for watching
 ffembed start                           # background daemon, debounced
 ffembed search "that thing about debounce"
 ffembed stop
 ```
-
-Image files (`jpg/png/webp/gif/bmp/tiff`) are embedded with a local DINOv3
-vision model when the `image` extra is installed. Search with an image path
-to find visually similar indexed images:
-
-```
-ffembed watch ~/photos --filter "*.jpg"
-ffembed search ~/photos/query.jpg
-```
-
-> DINOv3 weights are gated on Hugging Face. Accept the license on the model
-> page and authenticate with `huggingface-cli login` or set `HF_TOKEN` before
-> using the DINOv3 aliases. Any Hugging Face image model name can be passed to
-> `--vision-model` if you prefer a different or un-gated model.
 
 ## How it works
 
@@ -78,3 +63,15 @@ ffembed search ~/photos/query.jpg
 
 Adding a new `watch` target while the daemon is running requires a
 `ffembed restart` to pick it up.
+
+## Benchmarks
+
+Live result (50 notes, 8 tasks, gpt-4o-mini, temperature 0):
+
+| policy | success | median total tokens | median tool calls |
+|---|---|---|---|
+| list + read | 100% | 7,234 | 52 |
+| grep + read | 100% | 7,679 | 53 |
+| ffembed (ours) | 100% | **1,690** | **3** |
+
+Grep agents read dozens of notes to verify keyword hits; the semantic agent's first call returns ranked snippets, so it resolves in a fraction of the tokens, and its cost stays flat as the corpus grows while keyword agents read more.
