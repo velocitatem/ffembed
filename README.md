@@ -2,7 +2,9 @@
 
 no server, no cloud calls, no vector DB to run.
 
-**~4.5× fewer tokens to get the right file into your agent's hand** than grep
+**~10× cheaper per find, and finds more often**: real pi coding-agent sessions
+resolve tasks at $0.00054 vs $0.0053 per task with 92% vs 71% success
+(see [benchmarks](benchmarks/README.md)).
 
 A tiny local semantic index for your files. Point it at a directory, give it
 a glob filter, and it keeps an embedding index in sync as files change.
@@ -66,12 +68,27 @@ Adding a new `watch` target while the daemon is running requires a
 
 ## Benchmarks
 
-Live result (50 notes, 8 tasks, gpt-4o-mini, temperature 0):
+Real coding-agent harness: for each of 24 natural-language tasks we spawn a
+fresh [pi](https://github.com/badlogic/pi-mono) session in a corpus of
+100 neutral-named notes whose prose never names its topic. Same agent, same
+model (gpt-4o-mini); one arm gets plain shell tools, the other gets an extra
+`semantic_search` tool backed by ffembed.
 
-| policy | success | median total tokens | median tool calls |
-|---|---|---|---|
-| list + read | 100% | 7,234 | 52 |
-| grep + read | 100% | 7,679 | 53 |
-| ffembed (ours) | 100% | **1,690** | **3** |
+| arm | success | median tokens | p90 tokens | cost/task |
+|---|---|---|---|---|
+| shell tools | 71% | 3,910 | 12,520 | $0.0053 |
+| + ffembed search | **92%** | 2,080 | **2,114** | **$0.00054** |
 
-Grep agents read dozens of notes to verify keyword hits; the semantic agent's first call returns ranked snippets, so it resolves in a fraction of the tokens, and its cost stays flat as the corpus grows while keyword agents read more.
+The shell agents' cost is wildly task-dependent (p90 nearly 6× the median);
+the semantic agent's first call returns ranked snippets, so its spend is flat
+regardless of question style or corpus size — and it finishes more tasks at
+about a tenth of the cost.
+
+Run it yourself:
+
+```bash
+uv run --group dev python -m benchmarks.agent_pi --size 100
+```
+
+See [benchmarks/README.md](benchmarks/README.md) for methodology, plus a
+simulated no-API variant and raw latency benchmarks.

@@ -11,3 +11,7 @@ wheels/
 
 # pytest
 .pytest_cache/
+
+# benchmark outputs (regenerable)
+benchmarks/results*
+benchmarks/episodes.jsonl
