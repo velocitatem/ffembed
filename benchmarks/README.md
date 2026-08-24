@@ -19,7 +19,7 @@ For each task we spawn a fresh `pi -p --mode json` session inside a corpus of
 neutral-named notes whose prose *never names its topic* (the realistic hard
 case for keyword search). Both arms are the same agent + model; one gets
 plain shell tools, the other an extra `semantic_search` tool registered by
-[`ffembed_extension.ts`](ffembed_extension.ts).
+[`../extensions/ffembed.ts`](../extensions/ffembed.ts).
 
 Grading is deterministic: the file the agent finishes on must contain the
 answer passage. Tokens and cost come from pi's per-message `usage` — no

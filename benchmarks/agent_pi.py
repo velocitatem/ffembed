@@ -34,7 +34,7 @@ from .corpus import build_tasks, generate_implicit_corpus
 
 PI = shutil.which("pi")
 FFEMBED = shutil.which("ffembed")
-EXTENSION = Path(__file__).parent / "ffembed_extension.ts"
+EXTENSION = Path(__file__).parent.parent / "extensions" / "ffembed.ts"
 
 ARMS = {
     "shell": [],

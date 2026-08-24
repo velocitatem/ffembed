@@ -14,6 +14,22 @@ with the [ffembed skill](.claude/skills/ffembed/SKILL.md) ... drop it in
 your project's `.claude/skills/` and any Claude Code session will know
 how to drive it.
 
+## Use with pi
+
+One command gives every [pi](https://github.com/badlogic/pi-mono) session a
+`semantic_search` tool backed by your ffembed index:
+
+```bash
+pi install git:github.com/velocitatem/ffembed
+```
+
+Then, with a directory indexed (`ffembed watch <dir>`), the agent can search
+by meaning out of the box — this is exactly what the [benchmark
+harness](benchmarks/) measures: agents resolve find-the-note tasks ~10×
+cheaper with the tool than with shell alone. The repo also ships an
+[ffembed skill](.claude/skills/ffembed/SKILL.md) that pi discovers on
+install, so it knows when to reach for it.
+
 ## Install
 
 ```
@@ -76,7 +92,7 @@ model (gpt-4o-mini); one arm gets plain shell tools, the other gets an extra
 
 | arm | success | median tokens | p90 tokens | cost/task |
 |---|---|---|---|---|
-| shell tools | 71% | 3,910 | 12,520 | $0.0053 |
+| shell tools | 71% | 3,910 | 12,520 | $0.0053 
 | + ffembed search | **92%** | 2,080 | **2,114** | **$0.00054** |
 
 The shell agents' cost is wildly task-dependent (p90 nearly 6× the median);

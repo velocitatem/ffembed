@@ -1,0 +1,8 @@
+{
+  "name": "ffembed",
+  "private": true,
+  "description": "Local semantic search for pi — adds a semantic_search tool backed by ffembed (https://github.com/velocitatem/ffembed)",
+  "pi": {
+    "extensions": ["extensions/ffembed.ts"]
+  }
+}
