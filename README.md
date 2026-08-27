@@ -84,27 +84,63 @@ Adding a new `watch` target while the daemon is running requires a
 
 ## Benchmarks
 
-Real coding-agent harness: for each of 24 natural-language tasks we spawn a
-fresh [pi](https://github.com/badlogic/pi-mono) session in a corpus of
-100 neutral-named notes whose prose never names its topic. Same agent, same
-model (gpt-4o-mini); one arm gets plain shell tools, the other gets an extra
-`semantic_search` tool backed by ffembed.
+### Agent harness
+
+For each task we spawn fresh [pi](https://github.com/badlogic/pi-mono)
+sessions — one per arm — in a corpus of notes whose prose never names its
+topic. Same agent, same model; one arm gets plain shell tools, the other an
+extra `semantic_search` tool backed by ffembed. Tokens and cost come from
+pi's own usage accounting.
 
 | arm | success | median tokens | p90 tokens | cost/task |
 |---|---|---|---|---|
 | shell tools | 71% | 3,910 | 12,520 | $0.0053 
 | + ffembed search | **92%** | 2,080 | **2,114** | **$0.00054** |
 
-The shell agents' cost is wildly task-dependent (p90 nearly 6× the median);
-the semantic agent's first call returns ranked snippets, so its spend is flat
-regardless of question style or corpus size — and it finishes more tasks at
-about a tenth of the cost.
-
-Run it yourself:
+The shell arm's cost is wildly task-dependent (p90 ≈ 6× median) because it
+reads notes to verify keyword hits; the semantic arm's spend is flat — the
+first tool call returns ranked snippets. Regenerate with intervals:
 
 ```bash
-uv run --group dev python -m benchmarks.agent_pi --size 100
+uv run --group dev python -m benchmarks.run agent-pi --bank v2
 ```
 
-See [benchmarks/README.md](benchmarks/README.md) for methodology, plus a
-simulated no-API variant and raw latency benchmarks.
+### Retrieval quality
+
+Graded BEIR-style metrics (nDCG@10 / MRR@10 / Recall@100 via pytrec_eval),
+ffembed vs BM25, SQLite FTS5, and dense+sparse hybrid. Selected results
+(full tables in [benchmarks/README.md](benchmarks/README.md)):
+
+| dataset | system | nDCG@10 | MRR@10 | Recall@100 |
+|---|---|---|---|---|
+| implicit notes | bm25 | .483 | .589 | .744 |
+| implicit notes | **ffembed** | **.541** | **.745** | **1.00** |
+| SciFact (public BEIR set) | **ffembed** | .650 | .603 | .938 |
+| repo code (commit-message queries) | fts5 | .602 | 1.00 | .723 |
+| repo code | **hybrid** | .562 | .825 | **.840** |
+
+Notes never name their topic and filenames are neutral, so keyword search
+can't shortcut — that's why ffembed's recall is perfect there while keyword
+search misses ~28% of relevant notes. On code files, commit messages share
+vocabulary with identifiers, so keyword wins precision and hybrid (dense +
+sparse fusion) wins overall — worth knowing before indexing a repo.
+
+### What it costs to run
+
+Query latency is ~40 ms (p95 ≈ 150 ms) on personal-library scale — a
+brute-force cosine scan, no ANN, scales linearly. Indexing is the real
+price: one-time ONNX embedding per chunk on a laptop CPU (a few hundred
+chunks/s with minilm, ~3× slower with the default bge-small), amortized by
+the watcher daemon afterwards, which collapses editor save bursts into one
+re-index per file.
+
+Run the suites:
+
+```bash
+uv run --group dev python -m benchmarks.run retrieval --dataset synthetic \
+    --systems ffembed:bge-small bm25 fts5 hybrid:bge-small        # IR metrics
+uv run --group dev python -m benchmarks.run systems               # scaling
+```
+
+See [benchmarks/README.md](benchmarks/README.md) for methodology, datasets,
+statistics, and raw-run JSON outputs.
