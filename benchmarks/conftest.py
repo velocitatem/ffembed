@@ -23,20 +23,14 @@ BENCH_MODEL = "minilm"
 
 @pytest.fixture(scope="session", autouse=True)
 def _isolated_ffembed_home():
-    """Redirect ffembed's ROOT/DB_PATH/CACHE_DIR to a temp dir for the session."""
+    """Redirect ffembed's home (including modules that re-exported path
+    constants) into a temp dir for the session."""
+    from .isolation import isolate, restore
+
     tmp = Path(tempfile.mkdtemp(prefix="ffembed-bench-"))
-    original_root = ffembed_paths.ROOT
-    original_db = ffembed_paths.DB_PATH
-    original_cache = ffembed_paths.CACHE_DIR
-    ffembed_paths.ROOT = tmp
-    ffembed_paths.DB_PATH = tmp / "db.sqlite"
-    ffembed_paths.CACHE_DIR = tmp / "models"
-    ffembed_paths.ensure_root()
+    saved = isolate(tmp)
     yield tmp
-    # Restore originals before cleanup so later code is not confused.
-    ffembed_paths.ROOT = original_root
-    ffembed_paths.DB_PATH = original_db
-    ffembed_paths.CACHE_DIR = original_cache
+    restore(saved)
     shutil.rmtree(tmp, ignore_errors=True)
 
 
