@@ -166,7 +166,6 @@ def build_tasks(limit_per_style: int | None = None, seed: int = 0) -> list[dict]
     return tasks
 
 
-
 # Natural-language questions an agent might be asked, with the keywords a
 # literal-minded grep agent would plausibly try first (often absent from the
 # text because the corpus is written implicitly). Used by the simulated
@@ -197,6 +196,46 @@ TASKS = [
      "question": "did we note how the helper keeps running after the terminal closes?",
      "keywords": ["daemon", "background process", "detach"]},
 ]
+
+
+# --- implicit corpus v2 ----------------------------------------------------
+#
+# Backed by question_bank_v2.BANK (~40 topics, revision-frozen) so no run can
+# overfit the original eight examples. Mentions are GRADED:
+#   rel 2 — file whose main subject is the topic
+#   rel 1 — file carrying the passage as an off-topic aside (filler)
+# which lets the retrieval suite score nDCG/recall instead of binary hits.
+
+def generate_implicit_corpus_v2(
+    root: Path, files: int, *, fillers_per_note: int = 2, seed: int = 7,
+) -> tuple[list[Path], dict[str, dict[str, int]]]:
+    """Neutral-named notes built from ``question_bank_v2``.
+
+    Returns (paths, qrels) where qrels maps topic -> {filename: relevance},
+    directly usable as BEIR-style qrels.
+    """
+    from .question_bank_v2 import BANK
+
+    root.mkdir(parents=True, exist_ok=True)
+    rng = random.Random(seed)
+    topics = sorted(BANK)
+    created: list[Path] = []
+    qrels: dict[str, dict[str, int]] = {}
+    for i in range(files):
+        main = topics[i % len(topics)]
+        others = [t for t in topics if t != main]
+        filler = rng.sample(others, k=min(fillers_per_note, len(others)))
+        passages = [BANK[main]["passage"]] + [BANK[t]["passage"] for t in filler]
+        rng.shuffle(passages)
+        body = "\n\n".join(f"- {p}" for p in passages)
+        path = root / f"note_{i:04d}.md"
+        path.write_text(body, encoding="utf-8")
+        created.append(path)
+        qrels.setdefault(main, {})[path.stem] = 2
+        for t in filler:
+            entry = qrels.setdefault(t, {})
+            entry[path.stem] = max(entry.get(path.stem, 0), 1)
+    return created, qrels
 
 
 def generate_implicit_corpus(root: Path, files: int, *, fillers_per_note: int = 2,
